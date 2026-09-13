@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="color-scheme" content="dark">
+<title>Codeforces 随机抽题</title>
+<style>
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  :root{
+    --bg:#0f1115; --card:#161a21; --sunk:#0c0f14; --line:#242a35;
+    --txt:#e6e9ef; --dim:#8b93a3; --dim2:#697180;
+    --acc:#3b82f6; --ok:#22c55e; --err:#f87171;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .page{max-width:760px;margin:0 auto;padding:20px 16px calc(40px + env(safe-area-inset-bottom))}
+  header{margin-bottom:16px}
+  h1{font-size:20px;font-weight:650;margin:0 0 4px;letter-spacing:.2px}
+  .sub{margin:0;color:var(--dim);font-size:13px}
+  .status{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);margin-top:10px;min-height:18px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--dim2);flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)} .dot.load{background:var(--acc);animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .spin{width:13px;height:13px;border-radius:50%;flex:0 0 auto;border:2px solid #2c3542;border-top-color:var(--acc);animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card+.card{margin-top:12px}
+
+  /* 难度区间 */
+  .range{display:flex;align-items:flex-end;gap:10px}
+  .field{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .field span{font-size:12.5px;color:var(--dim)}
+  input{width:100%;font-family:var(--mono);font-size:16px;padding:11px 12px;border-radius:10px;
+        border:1px solid var(--line);background:var(--sunk);color:var(--txt);appearance:none}
+  input:focus{outline:none;border-color:var(--acc)}
+  .dash{color:var(--dim2);padding-bottom:12px}
+  .presets{display:flex;gap:8px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+  .presets::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;font:inherit;font-size:13px;padding:7px 12px;border-radius:999px;
+        border:1px solid var(--line);background:transparent;color:var(--dim);white-space:nowrap;cursor:pointer}
+  .chip.on{border-color:var(--acc);color:var(--txt);background:rgba(59,130,246,.14)}
+
+  .btn{font:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+       min-height:46px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);
+       background:#1c222c;color:var(--txt);text-decoration:none;cursor:pointer;
+       transition:background .15s,border-color .15s}
+  .btn:hover{background:#222a35}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{width:100%;margin-top:14px;min-height:50px;font-weight:600;
+               background:var(--acc);border-color:var(--acc);color:#fff}
+  .btn-primary:hover{background:#2f74e0}
+  .btn-mini{min-height:0;padding:5px 11px;font-size:12.5px;border-radius:8px}
+  .pool{margin-top:12px;font-size:12.5px;color:var(--dim);text-align:center}
+
+  /* 结果 */
+  .title-line{font-size:17px;font-weight:650;line-height:1.45}
+  .cid{font-family:var(--mono);color:var(--dim);font-weight:600}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .pill{font-family:var(--mono);font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:6px;border:1px solid currentColor}
+  .tagbox{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .tag{font-size:12px;color:var(--dim);background:var(--sunk);border:1px solid var(--line);padding:3px 8px;border-radius:6px}
+  .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .links .btn{flex:1 1 130px;font-size:13.5px;padding:10px 12px;margin-top:0;min-height:44px}
+
+  /* 题面 */
+  .stmt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;font-size:12.5px;color:var(--dim)}
+  .empty{color:var(--dim2);font-size:13.5px;text-align:center;margin:14px 0 2px}
+  .notice{font-size:13.5px;line-height:1.75;margin-top:12px;padding:12px 14px;border-radius:10px;
+          color:#fca5a5;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3)}
+  .st-body{margin-top:12px;background:#fbfbfd;color:#1c2130;border-radius:12px;padding:16px 15px;overflow-x:auto}
+  .st-body .header{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e3e6ee}
+  .st-body .header .title{font-size:17px;font-weight:700;margin-bottom:8px;color:#111627}
+  .st-body .header>div+div{font-size:13px;color:#4b5468;margin-top:3px}
+  .st-body .property-title{display:inline;font-style:italic;font-weight:600;color:#39415a;margin-right:6px}
+  .st-body .section-title{font-weight:700;font-size:14.5px;margin:18px 0 8px;color:#111627}
+  .st-body p{margin:10px 0}
+  .st-body ul,.st-body ol{margin:9px 0;padding-left:22px}
+  .st-body img{max-width:100%;height:auto}
+  .st-body a{color:#2c5cff}
+  .st-body table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%}
+  .st-body td,.st-body th{border:1px solid #dfe3ee;padding:5px 8px;font-size:13.5px}
+  .st-body .sample-test{margin:12px 0;border:1px solid #e3e6ee;border-radius:9px;overflow:hidden}
+  .st-body .sample-test>.input,.st-body .sample-test>.output{padding:9px 11px}
+  .st-body .sample-test>.output{border-top:1px dashed #e3e6ee;background:#f5f6fa}
+  .st-body .sample-test .title{font-weight:700;font-size:12.5px;margin-bottom:6px;color:#39415a}
+  .st-body pre{font-family:var(--mono);font-size:13px;line-height:1.55;background:#131a2c;color:#e6ecff;
+               padding:10px 12px;border-radius:8px;margin:0;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+  .st-body .tex-span{font-family:var(--mono)}
+  .st-body mjx-container{max-width:100%;overflow-x:auto;overflow-y:hidden}
+
+  /* 连接设置 */
+  details.settings{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  details.settings>summary{padding:13px 16px;font-size:13.5px;color:var(--dim);cursor:pointer;list-style:none}
+  details.settings>summary::-webkit-details-marker{display:none}
+  details.settings>summary::after{content:"›";float:right;color:var(--dim2)}
+  details.settings[open]>summary::after{transform:rotate(90deg)}
+  details.settings>div{padding:0 16px 16px;font-size:13px;color:var(--dim);line-height:1.7}
+  details.settings p{margin:4px 0 0}
+  code{font-family:var(--mono);font-size:12px;color:#c3cddd;background:var(--sunk);padding:1px 5px;border-radius:5px}
+  .row{display:flex;gap:8px;margin-top:10px}
+  .row input{flex:1 1 auto;min-width:0}
+  details.relay{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}
+  details.relay>summary{cursor:pointer;font-size:13px;color:var(--acc);list-style:none}
+  details.relay>summary::-webkit-details-marker{display:none}
+  details.relay>div{padding-top:8px}
+  ol.steps{margin:8px 0 10px;padding-left:20px;color:var(--dim)}
+  ol.steps li{margin:4px 0}
+  pre.code{font-family:var(--mono);font-size:11.5px;line-height:1.55;background:var(--sunk);
+           border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:0;
+           overflow:auto;max-height:230px;white-space:pre;color:#c3cddd}
+  footer{margin-top:22px;font-size:12px;color:var(--dim2);text-align:center;line-height:1.9}
+  footer a{color:var(--dim);text-decoration:none}
+
+  @media (min-width:560px){
+    .page{padding:28px 20px 56px}
+    h1{font-size:22px}
+    .btn-primary{width:auto;min-width:200px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Codeforces 随机抽题</h1>
+    <p class="sub">输入难度下标与上标，随机抽一道题并直接阅读题面</p>
+    <div class="status" id="status"><span class="dot load"></span><span>正在加载题库…</span></div>
+  </header>
+
+  <!-- 难度区间 -->
+  <section class="card">
+    <div class="range">
+      <label class="field"><span>难度下标 ≥</span>
+        <input type="number" id="minR" min="800" max="3500" step="100" value="1200" inputmode="numeric">
+      </label>
+      <div class="dash">–</div>
+      <label class="field"><span>难度上标 ≤</span>
+        <input type="number" id="maxR" min="800" max="3500" step="100" value="1400" inputmode="numeric">
+      </label>
+    </div>
+    <div class="presets" id="presets"></div>
+    <button class="btn btn-primary" id="btnDraw">随机抽一题</button>
+    <div class="pool" id="poolInfo">题库加载中…</div>
+  </section>
+
+  <!-- 结果 -->
+  <section class="card" id="resultCard" hidden>
+    <div class="title-line"><span class="cid" id="resId"></span> <span id="resName"></span></div>
+    <div class="meta" id="resMeta"></div>
+    <div class="tagbox" id="resTags"></div>
+    <div class="links" id="resLinks"></div>
+  </section>
+
+  <!-- 题面 -->
+  <section class="card">
+    <div class="stmt-head">
+      <span id="stmtStatus"></span>
+      <button class="btn btn-mini" id="btnRetry" hidden>重试</button>
+    </div>
+    <div id="stmtOut"></div>
+    <p class="empty" id="stmtEmpty">抽一题后，这里显示完整题面</p>
+  </section>
+
+  <!-- 连接设置 -->
+  <details class="settings">
+    <summary>连接设置</summary>
+    <div>
+      <p>
+        Codeforces 禁止自己的页面被<b>嵌入</b>，也不给 HTML 页面返回跨域响应头，所以在普通浏览器里必须靠代理转发题面。
+      </p>
+      <p>
+        <b>最稳的用法（不需要任何代理）：用 VS Code 内置浏览器打开本文件</b> ——
+        在该浏览器面板里执行命令 <code>Simple Browser: Show</code> 并打开本文件即可。
+        内置浏览器不受跨域限制（实测可直接读取 codeforces.com，200 / 60KB），题面约 1 秒就出来。
+      </p>
+      <p>
+        用普通 Chrome / Edge 打开时直连会被拦掉，程序会自动改用下面的公共代理；公共代理经常被限流，
+        若都失败，可填入自己的代理地址（含 <code>{url}</code> 时会自动 URL 编码），或用下方的自建中继。
+      </p>
+      <div class="row">
+        <input type="text" id="proxy" placeholder="https://…/?url=" autocomplete="off" spellcheck="false">
+        <button class="btn btn-mini" id="btnSaveProxy" style="min-height:44px;padding:0 16px">保存</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-mini" id="btnDiagnose" style="min-height:40px;padding:0 14px">检测可用通道</button>
+        <span class="status" style="margin-top:0">真实请求一次，约 20 秒</span>
+      </div>
+      <div id="diagOut" style="margin-top:10px"></div>
+      <div class="status" id="proxyMsg" style="margin-top:10px"></div>
+
+      <details class="relay">
+        <summary>公共代理都不通？30 秒自建一个中继（推荐，之后一劳永逸）</summary>
+        <div>
+          <p style="margin:0">
+            实测：本机可以直连 Codeforces 拿到完整题面（HTTP 200），之所以抓不到，只是因为浏览器<b>不允许网页跨域读取</b>，必须有一层转发。
+            公共代理随时会被限流或下线，自己跑一个最稳 —— 只用 Python 标准库，不需要装任何依赖。
+          </p>
+          <ol class="steps">
+            <li>点下面的「下载 proxy.py」（或点「复制代码」自己存成 <code>proxy.py</code>）</li>
+            <li>在该文件所在目录执行 <code>python proxy.py</code></li>
+            <li>上面的输入框填 <code>http://127.0.0.1:8787/?url=</code>，点「保存」</li>
+          </ol>
+          <pre class="code" id="relayCode"></pre>
+          <div class="row">
+            <button class="btn btn-mini" id="btnDownloadRelay" style="min-height:40px;padding:0 14px"
+                    title="部分浏览器会拦截下载；若没反应，请点「复制代码」">下载 proxy.py</button>
+            <button class="btn btn-mini" id="btnCopyRelay" style="min-height:40px;padding:0 14px">复制代码</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <footer>
+    题库来自 <a href="https://codeforces.com/apiHelp" target="_blank" rel="noreferrer">Codeforces 官方 API</a> ·
+    题面版权归 Codeforces 及题目作者所有
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ========== 常量 ========== */
+const API = "https://codeforces.com/api/problemset.problems";
+const K_CACHE = "cfrand3_cache";
+const K_SETTINGS = "cfrand3_settings";
+const K_CUSTOM = "cfrand3_custom_proxy";
+const K_BEST = "cfrand3_best_proxy";
+const K_GOOD = "cfrand3_good_channels";     // 曾经成功过的通道，下次优先
+const K_STMT = "cfrand3_stmt_cache";        // 题面缓存：同一题再看时不必联网
+const K_HEALTH = "cfrand3_health";          // 通道体检结果，10 分钟内复用
+const TTL = 24 * 3600 * 1000;
+const API_TIMEOUT = 15000;
+/* 抓取最长的单通道等待时间（第二轮用它，避免把"慢但可用"的通道误判为不可用） */
+const SCRAPE_TIMEOUT_MAX = 35000;
+
+/* 抓取通道。第一个是"直连"：
+   实测在 VS Code 内置浏览器（Simple Browser）里打开本文件时，跨域限制是关闭的
+   （fetch 的 res.type === "basic"），可以直接读取 codeforces.com 的题面页，200 / 60KB，
+   完全不需要任何代理 —— 这是单文件下最稳的用法。
+   在普通 Chrome/Edge 里直连会被 CORS 拦掉（立即失败，无额外开销），此时才需要下面的公共代理。
+   公共代理实测都不可靠：allorigins 忙时 429/520/522，codetabs 522，corsproxy.io 在 file:// 下 401，
+   cors.lol / cors.eu.org 长期 429，jina-reader 本网络不可达。 */
+const PUBLIC_PROXIES = [
+  { name: "直连",           make: u => u },
+  { name: "allorigins",     make: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}` },
+  { name: "allorigins-raw", make: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}` },
+  { name: "codetabs",       make: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
+  { name: "corsproxy.io",   make: u => `https://corsproxy.io/?url=${encodeURIComponent(u)}` },
+  { name: "cors.eu.org",    make: u => `https://cors.eu.org/${u}` },
+  { name: "cors.lol",       make: u => `https://api.cors.lol/?url=${u}` },
+  { name: "jina-reader",    make: u => `https://r.jina.ai/${u}` }
+];
+
+/* 备用站点：某些代理打不开主站时，镜像站可能可以 */
+const ALT_HOST = ["https://codeforces.com", "https://mirror.codeforces.com"];
+
+/* MathJax：抓取成功后才惰性加载；加载失败则退化为显示原始 LaTeX */
+const MATHJAX_CDNS = [
+  "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+  "https://fastly.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+  "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+];
+
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const num = v => Number(v).toLocaleString("en-US");
+
+/* Codeforces 官方难度配色 */
+function ratingColor(r) {
+  if (r < 1200) return "#9aa4b2";
+  if (r < 1400) return "#43d17a";
+  if (r < 1600) return "#22c2b6";
+  if (r < 1900) return "#4f8cff";
+  if (r < 2100) return "#b06cff";
+  if (r < 2400) return "#ffa42e";
+  return "#ff5b5b";
+}
+
+async function fetchText(url, timeoutMs) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: ctl.signal, cache: "no-store", redirect: "follow" });
+  } finally { clearTimeout(timer); }
+}
+/* 竞速：第一个成功的结果胜出 */
+function raceFirst(promises) {
+  return new Promise((resolve, reject) => {
+    const total = promises.length;
+    let failed = 0, settled = false;
+    if (!total) return reject(new Error("没有可用通道"));
+    promises.forEach(p => Promise.resolve(p).then(
+      v => { if (!settled) { settled = true; resolve(v); } },
+      () => { if (++failed >= total && !settled) { settled = true; reject(new Error("所有通道均失败")); } }
+    ));
+  });
+}
+function setStatus(kind, text) {
+  STATE.statusKind = kind;
+  STATE.statusText = text;
+  paintStatus();
+}
+/* 页头状态 = 主状态 + 通道体检结论（有就显示） */
+function paintStatus() {
+  const box = $("#status");
+  box.innerHTML = `<span class="dot ${STATE.statusKind || ""}"></span><span></span>`;
+  box.lastChild.textContent = (STATE.statusText || "") + (STATE.healthText ? " · " + STATE.healthText : "");
+}
+function readHealth() {
+  try {
+    const h = JSON.parse(localStorage.getItem(K_HEALTH) || "null");
+    if (h && Array.isArray(h.healthy) && Date.now() - h.ts < 10 * 60 * 1000) return h;
+  } catch (e) {}
+  return null;
+}
+/* 打开页面后先在后台把所有通道试一遍：这样第一次抽题就知道哪些能用 */
+async function warmUpChannels() {
+  const cached = readHealth();
+  if (cached) {
+    STATE.healthy = new Set(cached.healthy);
+    STATE.healthTotal = cached.total;
+    applyHealthText();
+    return;
+  }
+  const target = "https://codeforces.com/problemset/problem/1/A";
+  const channels = channelList(target, "all");
+  STATE.healthTotal = channels.length;
+  const results = await Promise.all(channels.map(async ch => {
+    try {
+      const res = await fetchText(ch.url, 12000);
+      if (!extractStatement(await res.text())) throw new Error("no");
+      markGood(ch.name);
+      return ch.name;
+    } catch (e) { return null; }
+  }));
+  const healthy = results.filter(Boolean);
+  STATE.healthy = new Set(healthy);
+  try {
+    localStorage.setItem(K_HEALTH, JSON.stringify({ ts: Date.now(), healthy, total: channels.length }));
+  } catch (e) {}
+  applyHealthText();
+}
+function applyHealthText() {
+  const n = STATE.healthy ? STATE.healthy.size : 0;
+  const total = STATE.healthTotal || channelList("https://codeforces.com/problemset/problem/1/A", "all").length;
+  STATE.healthText = n
+    ? `题面通道 ${n}/${total} 可用`
+    : `题面通道均不可用 · 建议用 VS Code 内置浏览器打开本文件（可直连）`;
+  paintStatus();
+  refreshPoolInfo();
+}
+
+/* ========== 状态 ========== */
+const STATE = {
+  problems: [], picked: new Set(), current: null, busy: false,
+  statusKind: "", statusText: "", healthText: "", healthy: null, healthTotal: 0
+};
+
+/* ========== 题库：Codeforces 官方 API（已开放 CORS） ========== */
+function normalize(payload) {
+  const solved = new Map();
+  (payload.result.problemStatistics || []).forEach(s => solved.set(s.contestId + "-" + s.index, s.solvedCount));
+  const out = [];
+  for (const p of (payload.result.problems || [])) {
+    if (!p.contestId || !p.index || typeof p.rating !== "number") continue;  // 未评级题目跳过
+    if (p.type && p.type !== "PROGRAMMING") continue;
+    const id = p.contestId + "-" + p.index;
+    out.push({ id, contestId: p.contestId, index: p.index, name: p.name,
+               rating: p.rating, tags: p.tags || [], solved: solved.get(id) || 0 });
+  }
+  return out;
+}
+function saveCache(list) {
+  try {
+    const packed = list.map(p => [p.contestId, p.index, p.name, p.rating, p.tags.join("\u0001")]);
+    localStorage.setItem(K_CACHE, JSON.stringify({ ts: Date.now(), v: 3, list: packed }));
+  } catch (e) { /* 超出配额就忽略 */ }
+}
+function readCache() {
+  try {
+    const d = JSON.parse(localStorage.getItem(K_CACHE) || "null");
+    if (!d || d.v !== 3 || !Array.isArray(d.list) || !d.list.length) return null;
+    if (Date.now() - d.ts > TTL) return null;
+    return d.list.map(r => ({
+      id: r[0] + "-" + r[1], contestId: r[0], index: r[1], name: r[2], rating: r[3],
+      tags: r[4] ? String(r[4]).split("\u0001") : [], solved: 0
+    }));
+  } catch (e) { return null; }
+}
+async function loadProblems() {
+  const cached = readCache();
+  if (cached) {
+    STATE.problems = cached;
+    setStatus("ok", `题库就绪：${num(cached.length)} 道题（本地缓存）`);
+    refreshPoolInfo();
+    return;
+  }
+  setStatus("load", "正在从 Codeforces 拉取题库…");
+  try {
+    const res = await fetchText(API, API_TIMEOUT);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = JSON.parse(await res.text());
+    if (!data || data.status !== "OK" || !data.result) throw new Error((data && data.comment) || "返回结构异常");
+    STATE.problems = normalize(data);
+    saveCache(STATE.problems);
+    setStatus("ok", `题库就绪：${num(STATE.problems.length)} 道题`);
+    refreshPoolInfo();
+  } catch (e) {
+    setStatus("err", `题库加载失败：${e.message}（需要能访问 codeforces.com）`);
+    $("#poolInfo").textContent = "";
+  }
+}
+
+/* ========== 抽题 ========== */
+function getRange() {
+  let lo = clamp(parseInt($("#minR").value, 10) || 800, 800, 3500);
+  let hi = clamp(parseInt($("#maxR").value, 10) || 3500, 800, 3500);
+  if (lo > hi) { const t = lo; lo = hi; hi = t; }
+  return [lo, hi];
+}
+function buildPool() {
+  const [lo, hi] = getRange();
+  return STATE.problems.filter(p => p.rating >= lo && p.rating <= hi);
+}
+function refreshPoolInfo() {
+  if (!STATE.problems.length) return;
+  const [lo, hi] = getRange(), pool = buildPool();
+  $("#poolInfo").textContent = pool.length
+    ? `区间 ${lo}–${hi}：符合条件的题目 ${num(pool.length)} 道`
+    : `区间 ${lo}–${hi} 没有题目，请调整难度范围`;
+}
+function draw() {
+  if (!STATE.problems.length) { setStatus("err", "题库尚未就绪，请稍候重试。"); return; }
+  const pool = buildPool();
+  if (!pool.length) { refreshPoolInfo(); return; }
+  let cand = pool.filter(p => !STATE.picked.has(p.id));
+  if (!cand.length) { STATE.picked.clear(); cand = pool; }
+  const p = cand[Math.floor(Math.random() * cand.length)];
+  STATE.picked.add(p.id);
+  STATE.current = p;
+  renderResult(p);
+  loadStatement(p);
+  refreshPoolInfo();
+}
+
+/* ========== 结果 ========== */
+function problemUrl(p) {
+  return p.contestId >= 100000
+    ? `https://codeforces.com/gym/${p.contestId}/problem/${p.index}`
+    : `https://codeforces.com/problemset/problem/${p.contestId}/${p.index}`;
+}
+function renderResult(p) {
+  const c = ratingColor(p.rating);
+  $("#resId").textContent = p.contestId + p.index + ".";
+  $("#resName").textContent = p.name;
+
+  const meta = $("#resMeta");
+  meta.innerHTML = "";
+  const pill = document.createElement("span");
+  pill.className = "pill"; pill.textContent = "rating " + p.rating; pill.style.color = c;
+  meta.append(pill);
+  if (p.solved) {
+    const s = document.createElement("span");
+    s.className = "pill"; s.textContent = "通过 " + num(p.solved); s.style.color = "#8b93a3";
+    meta.append(s);
+  }
+
+  const tags = $("#resTags");
+  tags.innerHTML = "";
+  p.tags.forEach(t => {
+    const b = document.createElement("span");
+    b.className = "tag"; b.textContent = t;
+    tags.append(b);
+  });
+
+  const key = `${p.contestId}${p.index}`;
+  const sites = [
+    ["打开原题", problemUrl(p)],
+    ["vjudge", `https://vjudge.net/problem/CodeForces-${p.contestId}-${p.index}`]
+  ];
+  /* 洛谷按 "CF+题号" 收录 Codeforces 题目；Gym 训练题没有对应页面，就不放链接 */
+  if (p.contestId < 100000) {
+    sites.push(["洛谷题面", `https://www.luogu.com.cn/problem/CF${key}`]);
+    sites.push(["洛谷题解", `https://www.luogu.com.cn/problem/solution/CF${key}`]);
+  }
+  const links = $("#resLinks");
+  links.innerHTML = "";
+  sites.forEach(([label, url], i) => {
+    const a = document.createElement("a");
+    a.className = "btn" + (i === 0 ? " btn-primary" : "");
+    if (i === 0) { a.style.marginTop = "0"; a.style.width = "auto"; }
+    a.textContent = label;
+    a.href = url; a.target = "_blank"; a.rel = "noreferrer";
+    links.append(a);
+  });
+  $("#resultCard").hidden = false;
+}
+
+/* ========== 题面抓取（服务端抓官方 HTML + 本地解析渲染） ========== */
+function proxyUrlFor(tpl, target) {
+  if (tpl.includes("{url}")) return tpl.replace("{url}", encodeURIComponent(target));
+  if (tpl.includes("{raw}")) return tpl.replace("{raw}", target);
+  return tpl + target;
+}
+/* 记住曾经成功过的通道，下次排到最前面 */
+function goodNames() {
+  try { return JSON.parse(localStorage.getItem(K_GOOD) || "[]"); } catch (e) { return []; }
+}
+function markGood(name) {
+  const key = name.replace("（上次可用）", "");
+  const list = goodNames();
+  if (!list.includes(key)) {
+    list.unshift(key);
+    try { localStorage.setItem(K_GOOD, JSON.stringify(list.slice(0, 6))); } catch (e) {}
+  }
+}
+function channelList(target, only) {
+  const list = [];
+  const custom = localStorage.getItem(K_CUSTOM);
+  if (custom) list.push({ name: "自定义代理", url: proxyUrlFor(custom, target), template: custom });
+  const good = goodNames();
+  const healthy = STATE.healthy || new Set();
+  /* 排序：本次体检可用的最优先，其次是历史上成功过的 */
+  const rank = name => {
+    if (healthy.has(name)) return -1;
+    const i = good.indexOf(name);
+    return i < 0 ? 99 : i;
+  };
+  /* only === "preferred" 时只挑"体检可用 / 曾成功 / allorigins"，避免重试时把
+     有限额的公共代理打挂（allorigins 被频繁请求会返回 429/520/522）。 */
+  const pool = (only === "preferred"
+    ? PUBLIC_PROXIES.filter(p => healthy.has(p.name) || good.includes(p.name) || p.name === "allorigins")
+    : PUBLIC_PROXIES.slice());
+  pool.sort((a, b) => rank(a.name) - rank(b.name));
+  pool.forEach(p => list.push({ name: p.name, url: p.make(target), template: "public:" + p.name }));
+  const seen = new Set();
+  return list.filter(c => !seen.has(c.url) && seen.add(c.url));
+}
+function extractStatement(text) {
+  let html = text;
+  if (html.trim().startsWith("{")) {
+    try { const j = JSON.parse(html); if (typeof j.contents === "string") html = j.contents; } catch (e) {}
+  }
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const ps = doc.querySelector(".problem-statement");
+  if (ps) return { kind: "html", node: ps };
+  if (/Markdown Content:|^Title:/m.test(text))
+    return { kind: "text", text: text.replace(/^Title:[\s\S]*?Markdown Content:\s*/m, "") };
+  return null;
+}
+/* 题面本地缓存：抓到过一次的题目，再抽到就直接显示，不再依赖代理 */
+const STMT_TTL = 7 * 24 * 3600 * 1000;
+function readStmtCache(p) {
+  try {
+    const all = JSON.parse(localStorage.getItem(K_STMT) || "{}");
+    const e = all[p.contestId + p.index];
+    if (e && typeof e.h === "string" && Date.now() - e.ts < STMT_TTL) return e.h;
+  } catch (e) {}
+  return null;
+}
+function writeStmtCache(p, html) {
+  try {
+    const all = JSON.parse(localStorage.getItem(K_STMT) || "{}");
+    all[p.contestId + p.index] = { h: html, ts: Date.now() };
+    const keys = Object.keys(all);
+    if (keys.length > 20) {
+      keys.sort((a, b) => all[a].ts - all[b].ts)
+          .slice(0, keys.length - 20)
+          .forEach(k => delete all[k]);
+    }
+    localStorage.setItem(K_STMT, JSON.stringify(all));
+  } catch (e) {}
+}
+
+/* 把一批通道并发跑一遍，返回第一个成功的 */
+function raceChannels(channels, timeout) {
+  const tasks = channels.map(async ch => {
+    const t0 = performance.now();
+    const res = await fetchText(ch.url, timeout);
+    const parsed = extractStatement(await res.text());
+    if (!parsed) throw new Error("未返回题面结构");
+    markGood(ch.name);
+    return { ...parsed, channel: ch.name, ms: Math.round(performance.now() - t0), template: ch.template };
+  });
+  return raceFirst(tasks);
+}
+/* 多轮抓取：第 1 轮全通道快试；第 2 轮只打"可靠通道"、加长超时并同时试镜像站 */
+async function scrape(p) {
+  const primary = problemUrl(p);
+  const alt = primary.replace("https://codeforces.com", ALT_HOST[1]);
+  const rounds = [
+    { timeout: 15000, urls: [primary],        only: "all",       tip: "抓取中…" },
+    { timeout: 35000, urls: [primary, alt],   only: "preferred", tip: "重试中（加长超时 + 镜像站）…" }
+  ];
+  let lastErr = null;
+  for (let i = 0; i < rounds.length; i++) {
+    const round = rounds[i];
+    if (i > 0) await new Promise(res => setTimeout(res, 1200));   // 稍等再重试，避开瞬时限流
+    setStmtStatus("load", round.tip);
+    const channels = [];
+    const seen = new Set();
+    round.urls.forEach(u => channelList(u, round.only).forEach(c => {
+      if (!seen.has(c.url)) { seen.add(c.url); channels.push(c); }
+    }));
+    try {
+      const winner = await raceChannels(channels, round.timeout);
+      if (winner.template) { try { localStorage.setItem(K_BEST, winner.template); } catch (e) {} }
+      return winner;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("抓取失败");
+}
+
+/* Codeforces 的公式分隔符：$$$…$$$ 行内，$$$$$$…$$$$$$ 行间（见其 MathJax 配置） */
+function convertCfMath(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) if (n.nodeValue.includes("$$$")) nodes.push(n);
+  nodes.forEach(node => {
+    let v = node.nodeValue;
+    v = v.replace(/\${6}([\s\S]*?)\${6}/g, (m, p) => `\n$$${p}$$\n`);
+    v = v.replace(/\${3}([\s\S]*?)\${3}/g, (m, p) => `$${p}$`);
+    if (v !== node.nodeValue) node.nodeValue = v;
+  });
+}
+let mathjaxPromise = null;
+function loadScript(src, ms) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    const timer = setTimeout(() => { s.remove(); reject(new Error("超时")); }, ms);
+    s.src = src; s.async = true;
+    s.onload = () => { clearTimeout(timer); resolve(); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); reject(new Error("失败")); };
+    document.head.appendChild(s);
+  });
+}
+function ensureMathJax() {
+  if (window.MathJax && window.MathJax.typesetPromise) return Promise.resolve(true);
+  if (mathjaxPromise) return mathjaxPromise;
+  window.MathJax = {
+    tex: { inlineMath: [["$", "$"], ["\\(", "\\)"]], displayMath: [["$$", "$$"], ["\\[", "\\]"]] },
+    options: { skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"] },
+    startup: { typeset: false }
+  };
+  mathjaxPromise = (async () => {
+    for (const src of MATHJAX_CDNS) { try { await loadScript(src, 9000); return true; } catch (e) {} }
+    return false;
+  })();
+  return mathjaxPromise;
+}
+function renderStatement(result) {
+  const out = $("#stmtOut");
+  out.innerHTML = "";
+  $("#stmtEmpty").hidden = true;
+
+  if (result.kind === "text") {
+    const box = document.createElement("div");
+    box.className = "notice";
+    box.style.cssText = "color:#cbd5e1;background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3)";
+    box.textContent = `已通过 ${result.channel} 抓到题面纯文本（公式与图片可能不完整）：`;
+    const pre = document.createElement("pre");
+    pre.style.cssText = "margin-top:10px;background:#eef2f9;color:#1c2130;white-space:pre-wrap";
+    pre.textContent = result.text;
+    box.append(pre);
+    out.append(box);
+    return;
+  }
+
+  const holder = document.createElement("div");
+  holder.className = "st-body";
+  const clone = document.importNode(result.node, true);
+
+  // MathJax v2 遗留写法 → 文本
+  clone.querySelectorAll('script[type^="math/tex"]').forEach(s => {
+    const disp = /mode=display/.test(s.getAttribute("type") || "");
+    s.replaceWith(document.createTextNode((disp ? "$$" : "$") + (s.textContent || "").trim() + (disp ? "$$" : "$")));
+  });
+  clone.querySelectorAll("script").forEach(s => s.remove());
+  // 相对地址 → 绝对地址
+  clone.querySelectorAll("img").forEach(img => {
+    const src = img.getAttribute("src");
+    if (src && !/^data:/i.test(src)) { try { img.src = new URL(src, "https://codeforces.com").href; } catch (e) {} }
+    img.loading = "lazy";
+  });
+  clone.querySelectorAll("a").forEach(a => {
+    const href = a.getAttribute("href");
+    if (href && !href.startsWith("#")) { try { a.href = new URL(href, "https://codeforces.com").href; } catch (e) {} }
+    a.target = "_blank"; a.rel = "noreferrer";
+  });
+  convertCfMath(clone);
+  holder.append(clone);
+  out.append(holder);
+
+  ensureMathJax().then(ok => {
+    if (ok && window.MathJax.typesetPromise) window.MathJax.typesetPromise([holder]).catch(() => {});
+  });
+}
+
+function setStmtStatus(kind, text) {
+  const el = $("#stmtStatus");
+  el.innerHTML = kind === "load"
+    ? `<span class="spin"></span><span></span>`
+    : `<span class="dot ${kind}"></span><span></span>`;
+  el.lastChild.textContent = text;
+}
+function loadStatement(p) {
+  $("#stmtOut").innerHTML = "";
+  $("#stmtEmpty").hidden = false;
+  $("#stmtEmpty").textContent = "正在抓取题面…";
+  setStmtStatus("load", "抓取中…");
+  $("#btnRetry").hidden = true;
+  scrapeAndShow(p);
+}
+async function scrapeAndShow(p) {
+  if (STATE.busy) return;
+  STATE.busy = true;
+  try {
+    let r = null;
+    const cached = readStmtCache(p);
+    if (cached) {
+      const node = new DOMParser().parseFromString(cached, "text/html")
+                                  .querySelector(".problem-statement");
+      if (node) r = { kind: "html", node, channel: "本地缓存", ms: 0 };
+    }
+    if (!r) {
+      r = await scrape(p);
+      if (r.kind === "html") writeStmtCache(p, r.node.outerHTML);
+    }
+    renderStatement(r);
+    setStmtStatus("ok", r.channel === "本地缓存"
+      ? "题面来自本地缓存"
+      : `题面已就绪 · ${r.channel} · ${(r.ms / 1000).toFixed(1)}s`);
+  } catch (e) {
+    $("#stmtEmpty").hidden = true;
+    const box = document.createElement("div");
+    box.className = "notice";
+    box.innerHTML = "题面抓取失败：直连被跨域拦截，公共代理此刻也都不可用。<br>" +
+      "① <b>用 VS Code 内置浏览器打开本文件</b>（命令面板 → <code>Simple Browser: Show</code>）即可直连，无需代理；<br>" +
+      "② 或点上方「打开原题」阅读；<br>" +
+      "③ 或在下方「连接设置」里填自己的代理地址 / 用自建中继。";
+    $("#stmtOut").append(box);
+    setStmtStatus("err", "抓取失败");
+  } finally {
+    $("#btnRetry").hidden = false;
+    STATE.busy = false;
+  }
+}
+
+/* 自建中继脚本（就是本文件里"下载 proxy.py"给出的内容，已实测可用，抓取约 1 秒） */
+const RELAY_CODE = `# proxy.py —— Codeforces 题面中继（Python 3.8+，仅标准库，无需安装任何依赖）
+# 用法: python proxy.py           （也可 python proxy.py 9000 换端口）
+# 然后在网页「连接设置」里填 http://127.0.0.1:8787/?url= 并点保存
+import http.server
+import socketserver
+import sys
+import urllib.parse
+import urllib.request
+
+PORT = 8787
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+
+    def _send(self, code, body, ctype="text/plain; charset=utf-8"):
+        body = body.encode("utf-8") if isinstance(body, str) else body
+        try:
+            self.send_response(code)
+            self._cors()
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass  # 网页并发竞速时会主动断开较慢的通道，属正常现象
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_GET(self):
+        target = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("url", [None])[0]
+        if not target:
+            return self._send(400, "usage: /?url=<encoded url>")
+        try:
+            req = urllib.request.Request(target, headers={
+                "User-Agent": UA,
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            with urllib.request.urlopen(req, timeout=25) as r:
+                body = r.read()
+        except Exception as e:
+            sys.stderr.write("[proxy] error: %s\\n" % e)
+            return self._send(502, "proxy error: %s" % e)
+        self._send(200, body, "text/html; charset=utf-8")
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("[proxy] " + (fmt % args) + "\\n")
+
+
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
+            return  # 客户端竞速中断，忽略即可
+        super().handle_error(request, client_address)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        PORT = int(sys.argv[1])
+    print("proxy ready => http://127.0.0.1:%d/?url=..." % PORT)
+    Server(("127.0.0.1", PORT), Handler).serve_forever()
+`;
+
+function downloadRelay() {
+  const blob = new Blob([RELAY_CODE], { type: "text/x-python;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "proxy.py";
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  $("#proxyMsg").innerHTML = `<span class="dot ok"></span><span>已下载 proxy.py，运行 python proxy.py 后回来填地址</span>`;
+}
+async function copyRelay() {
+  const msg = $("#proxyMsg");
+  const ok = () => { msg.innerHTML = `<span class="dot ok"></span><span>已复制，存成 proxy.py 后运行 python proxy.py</span>`; };
+  try {
+    await navigator.clipboard.writeText(RELAY_CODE);
+    return ok();
+  } catch (e) { /* 回退到旧接口 */ }
+  try {
+    const pre = $("#relayCode");
+    const range = document.createRange();
+    range.selectNodeContents(pre);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    if (document.execCommand("copy")) return ok();
+  } catch (e) { /* 忽略 */ }
+  msg.innerHTML = `<span class="dot err"></span><span>复制被浏览器拦截，请手动选中代码块后 Ctrl+C</span>`;
+}
+
+/* 逐个测试所有通道，让"为什么抓不到"变得可见 */
+async function diagnose() {
+  const out = $("#diagOut");
+  const target = STATE.current ? problemUrl(STATE.current)
+                               : "https://codeforces.com/problemset/problem/1/A";
+  const channels = channelList(target);
+  out.innerHTML = `<div class="status"><span class="spin"></span><span>正在逐个测试 ${channels.length} 个通道（约 20 秒）…</span></div>`;
+  const results = await Promise.all(channels.map(async ch => {
+    const t0 = performance.now();
+    try {
+      // 超时与实际抓取的最长等待保持一致，避免把"慢但可用"的通道误判为不可用
+      const res = await fetchText(ch.url, SCRAPE_TIMEOUT_MAX);
+      if (!extractStatement(await res.text())) throw new Error("返回内容里没有题面");
+      markGood(ch.name);
+      return { name: ch.name, ok: true, ms: Math.round(performance.now() - t0) };
+    } catch (e) {
+      return { name: ch.name, ok: false, msg: e.name === "AbortError" ? "超时" : e.message };
+    }
+  }));
+
+  const okCount = results.filter(r => r.ok).length;
+  /* 体检结果同时更新到页头状态与缓存 */
+  STATE.healthy = new Set(results.filter(r => r.ok).map(r => r.name));
+  STATE.healthTotal = results.length;
+  try {
+    localStorage.setItem(K_HEALTH, JSON.stringify({
+      ts: Date.now(), healthy: [...STATE.healthy], total: results.length
+    }));
+  } catch (e) {}
+  applyHealthText();
+  out.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "status";
+  head.innerHTML = okCount
+    ? `<span class="dot ok"></span><span>${okCount} / ${results.length} 个通道可用，已记住并优先使用</span>`
+    : `<span class="dot err"></span><span>0 / ${results.length} 个通道可用：当前网络到这些公共代理都不通，建议直接点「打开原题」阅读，或填入自己的代理</span>`;
+  out.append(head);
+
+  const list = document.createElement("div");
+  list.className = "tagbox";
+  results.forEach(r => {
+    const t = document.createElement("span");
+    t.className = "tag";
+    t.textContent = r.ok ? `${r.name} ✓ ${(r.ms / 1000).toFixed(1)}s` : `${r.name} ✗`;
+    if (r.ok) { t.style.color = "#4ade80"; t.style.borderColor = "rgba(74,222,128,.45)"; }
+    t.title = r.ok ? "可用" : (r.msg || "不可用");
+    list.append(t);
+  });
+  out.append(list);
+}
+
+/* ========== 设置 ========== */
+function saveSettings() {
+  try {
+    localStorage.setItem(K_SETTINGS, JSON.stringify({ min: $("#minR").value, max: $("#maxR").value }));
+  } catch (e) {}
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(K_SETTINGS) || "null");
+    if (s && s.min) $("#minR").value = s.min;
+    if (s && s.max) $("#maxR").value = s.max;
+  } catch (e) {}
+}
+async function saveProxy() {
+  const tpl = $("#proxy").value.trim();
+  const msg = $("#proxyMsg");
+  if (!tpl) {
+    localStorage.removeItem(K_CUSTOM);
+    msg.innerHTML = `<span class="dot ok"></span><span>已清除，将只使用公共代理</span>`;
+    return;
+  }
+  msg.innerHTML = `<span class="spin"></span><span>正在测试…</span>`;
+  try {
+    const res = await fetchText(proxyUrlFor(tpl, "https://codeforces.com/problemset/problem/4/A"), 15000);
+    if (!extractStatement(await res.text())) throw new Error("返回内容里没有题面");
+    localStorage.setItem(K_CUSTOM, tpl);
+    msg.innerHTML = `<span class="dot ok"></span><span>可用，已保存</span>`;
+  } catch (e) {
+    msg.innerHTML = `<span class="dot err"></span><span>不可用：${e.message}</span>`;
+  }
+}
+
+/* ========== 初始化 ========== */
+const PRESETS = [
+  ["入门 800–900", 800, 900], ["普及 1000–1400", 1000, 1400], ["提高 1500–1900", 1500, 1900],
+  ["省选 2000–2400", 2000, 2400], ["大师 2500–3500", 2500, 3500], ["全部 800–3500", 800, 3500]
+];
+function initPresets() {
+  const box = $("#presets");
+  PRESETS.forEach(([label, lo, hi]) => {
+    const c = document.createElement("button");
+    c.className = "chip"; c.textContent = label;
+    c.onclick = () => {
+      $("#minR").value = lo; $("#maxR").value = hi;
+      saveSettings(); refreshPoolInfo();
+      box.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
+      c.classList.add("on");
+    };
+    box.append(c);
+  });
+}
+function bindEvents() {
+  $("#btnDraw").onclick = draw;
+  $("#btnRetry").onclick = () => STATE.current && loadStatement(STATE.current);
+  $("#btnSaveProxy").onclick = saveProxy;
+  $("#btnDiagnose").onclick = diagnose;
+  $("#btnDownloadRelay").onclick = downloadRelay;
+  $("#btnCopyRelay").onclick = copyRelay;
+  ["#minR", "#maxR"].forEach(sel => {
+    $(sel).addEventListener("change", () => { saveSettings(); refreshPoolInfo(); });
+    $(sel).addEventListener("input", refreshPoolInfo);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.target.matches("input")) draw();
+  });
+}
+
+(function init() {
+  $("#relayCode").textContent = RELAY_CODE;
+  loadSettings();
+  initPresets();
+  bindEvents();
+  const saved = localStorage.getItem(K_CUSTOM);
+  if (saved) $("#proxy").value = saved;
+  loadProblems();
+  warmUpChannels();   // 后台体检通道，页头会显示"N/M 可用"
+  // 便于调试：控制台可用 CFRandApp.draw() / CFRandApp.scrape({contestId:4,index:'A'})
+  window.CFRandApp = { draw, state: STATE, renderStatement, convertCfMath, extractStatement,
+                       scrape, channelList, goodNames, diagnose, warmUpChannels };
+})();
+</script>
+</body>
+</html>
