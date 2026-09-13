@@ -72,7 +72,11 @@
   .links .btn{flex:1 1 130px;font-size:13.5px;padding:10px 12px;margin-top:0;min-height:44px}
 
   /* 题面 */
-  .stmt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;font-size:12.5px;color:var(--dim)}
+  .stmt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;font-size:12.5px;color:var(--dim);flex-wrap:wrap}
+  .head-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{font:inherit;font-size:12px;padding:5px 10px;background:transparent;color:var(--dim);border:0;cursor:pointer}
+  .seg button.on{background:var(--acc);color:#fff}
   .empty{color:var(--dim2);font-size:13.5px;text-align:center;margin:14px 0 2px}
   .notice{font-size:13.5px;line-height:1.75;margin-top:12px;padding:12px 14px;border-radius:10px;
           color:#fca5a5;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3)}
@@ -96,6 +100,14 @@
                padding:10px 12px;border-radius:8px;margin:0;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
   .st-body .tex-span{font-family:var(--mono)}
   .st-body mjx-container{max-width:100%;overflow-x:auto;overflow-y:hidden}
+  /* Markdown 视图用到的排版 */
+  .st-body h1{font-size:19px;margin:0 0 10px;color:#111627}
+  .st-body h2{font-size:15.5px;margin:20px 0 8px;color:#111627}
+  .st-body h3{font-size:14.5px;margin:16px 0 6px;color:#111627}
+  .st-body hr{border:0;border-top:1px solid #e3e6ee;margin:16px 0}
+  .st-body blockquote{margin:10px 0;padding:6px 12px;border-left:3px solid #d5dae6;color:#4b5468;background:#f6f7fb}
+  .st-body code{font-family:var(--mono);font-size:12.5px;background:#eef1f7;color:#26304a;padding:1px 5px;border-radius:5px}
+  .st-body ul{list-style:disc}
 
   /* 连接设置 */
   details.settings{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
@@ -164,7 +176,14 @@
   <section class="card">
     <div class="stmt-head">
       <span id="stmtStatus"></span>
-      <button class="btn btn-mini" id="btnRetry" hidden>重试</button>
+      <span class="head-tools">
+        <span class="seg" id="viewSwitch" hidden>
+          <button data-view="html" class="on">HTML</button>
+          <button data-view="markdown">Markdown</button>
+        </span>
+        <button class="btn btn-mini" id="btnCopyMd" hidden>复制 Markdown</button>
+        <button class="btn btn-mini" id="btnRetry" hidden>重试</button>
+      </span>
     </div>
     <div id="stmtOut"></div>
     <p class="empty" id="stmtEmpty">抽一题后，这里显示完整题面</p>
@@ -363,7 +382,11 @@ function applyHealthText() {
 /* ========== 状态 ========== */
 const STATE = {
   problems: [], picked: new Set(), current: null, busy: false,
-  statusKind: "", statusText: "", healthText: "", healthy: null, healthTotal: 0
+  statusKind: "", statusText: "", healthText: "", healthy: null, healthTotal: 0,
+  view: "html",            // "html" | "markdown"
+  lastResult: null,        // 当前题面（用于视图切换，不用重新抓取）
+  lastHtml: "",            // 清理后的题面 HTML
+  md: ""                   // 题面的 Markdown 文本
 };
 
 /* ========== 题库：Codeforces 官方 API（已开放 CORS） ========== */
@@ -659,28 +682,9 @@ function ensureMathJax() {
   })();
   return mathjaxPromise;
 }
-function renderStatement(result) {
-  const out = $("#stmtOut");
-  out.innerHTML = "";
-  $("#stmtEmpty").hidden = true;
-
-  if (result.kind === "text") {
-    const box = document.createElement("div");
-    box.className = "notice";
-    box.style.cssText = "color:#cbd5e1;background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3)";
-    box.textContent = `已通过 ${result.channel} 抓到题面纯文本（公式与图片可能不完整）：`;
-    const pre = document.createElement("pre");
-    pre.style.cssText = "margin-top:10px;background:#eef2f9;color:#1c2130;white-space:pre-wrap";
-    pre.textContent = result.text;
-    box.append(pre);
-    out.append(box);
-    return;
-  }
-
-  const holder = document.createElement("div");
-  holder.className = "st-body";
-  const clone = document.importNode(result.node, true);
-
+/* 清理题面节点：去脚本、补绝对地址、把 Codeforces 的 $$$ 公式分隔符转成 $...$ */
+function prepareStatement(node) {
+  const clone = document.importNode(node, true);
   // MathJax v2 遗留写法 → 文本
   clone.querySelectorAll('script[type^="math/tex"]').forEach(s => {
     const disp = /mode=display/.test(s.getAttribute("type") || "");
@@ -699,12 +703,199 @@ function renderStatement(result) {
     a.target = "_blank"; a.rel = "noreferrer";
   });
   convertCfMath(clone);
-  holder.append(clone);
-  out.append(holder);
+  return clone;
+}
 
+/* ================= HTML → Markdown ================= */
+function mdInline(node) {
+  let out = "";
+  node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { out += n.nodeValue.replace(/\s+/g, " "); return; }
+    if (n.nodeType !== 1) return;
+    const tag = n.tagName.toLowerCase();
+    if (tag === "script" || tag === "style") return;
+    if (tag === "br") { out += "\n"; return; }
+    const inner = mdInline(n);
+    if ((n.className || "").includes("property-title")) { out += "**" + inner.trim() + "**: "; return; }
+    switch (tag) {
+      case "strong": case "b": out += "**" + inner.trim() + "**"; break;
+      case "em": case "i": out += "*" + inner.trim() + "*"; break;
+      case "code": out += "`" + inner.trim() + "`"; break;
+      case "sup": out += "^" + inner.trim(); break;
+      case "sub": out += "~" + inner.trim(); break;
+      case "a": out += `[${inner.trim() || n.getAttribute("href")}](${n.href})`; break;
+      case "img": out += `![${n.getAttribute("alt") || "img"}](${n.src})`; break;
+      default: out += inner;
+    }
+  });
+  return out.replace(/[ \t]+/g, " ").replace(/ +([,.;:!?，。；：！？)])/g, "$1");
+}
+function mdTable(tbl) {
+  const rows = [...tbl.querySelectorAll("tr")].map(tr =>
+    [...tr.children].map(td => mdInline(td).trim().replace(/\|/g, "\\|")));
+  if (!rows.length) return "";
+  const head = rows[0];
+  const body = rows.slice(1);
+  return [ "| " + head.join(" | ") + " |",
+           "| " + head.map(() => "---").join(" | ") + " |",
+           ...body.map(r => "| " + r.join(" | ") + " |") ].join("\n");
+}
+function mdBlocks(container) {
+  const parts = [];
+  const push = s => { const t = (s || "").trim(); if (t) parts.push(t); };
+  /* 行间公式（$$…$$）单独成块，这样粘到 Obsidian / Typora / GitHub 里也能正确渲染 */
+  const pushWithDisplayMath = text => {
+    const chunks = String(text || "").split(/\n?\$\$([\s\S]*?)\$\$\n?/g);
+    chunks.forEach((c, i) => {
+      if (i % 2 === 1) push("$$\n" + c.trim() + "\n$$");
+      else push(c);
+    });
+  };
+  container.childNodes.forEach(n => {
+    if (n.nodeType === 3) { push(n.nodeValue); return; }
+    if (n.nodeType !== 1) return;
+    const tag = n.tagName.toLowerCase();
+    const cls = n.className || "";
+    if (tag === "script" || tag === "style") return;
+    if (cls.includes("header")) {
+      const title = n.querySelector(".title");
+      if (title) push("# " + mdInline(title).trim());
+      const limits = [...n.children].filter(c => c !== title)
+        .map(c => mdInline(c).trim().replace(/\s+/g, " ")).filter(Boolean);
+      if (limits.length) push(limits.map(l => "- " + l).join("\n"));
+      return;
+    }
+    if (cls.includes("section-title")) { push("## " + mdInline(n).trim()); return; }
+    if (cls.includes("sample-test")) {
+      const inp = n.querySelector(".input pre"), outp = n.querySelector(".output pre");
+      if (inp) push("**输入**\n\n```\n" + inp.textContent.replace(/\s+$/, "") + "\n```");
+      if (outp) push("**输出**\n\n```\n" + outp.textContent.replace(/\s+$/, "") + "\n```");
+      return;
+    }
+    if (tag === "p") { pushWithDisplayMath(mdInline(n)); return; }
+    if (/^h[1-6]$/.test(tag)) { push("#".repeat(+tag[1]) + " " + mdInline(n).trim()); return; }
+    if (tag === "pre") { push("```\n" + n.textContent.replace(/\s+$/, "") + "\n```"); return; }
+    if (tag === "ul" || tag === "ol") {
+      const items = [...n.children].filter(c => c.tagName.toLowerCase() === "li");
+      push(items.map((li, i) => `${tag === "ol" ? (i + 1) + "." : "-"} ${mdInline(li).trim()}`).join("\n"));
+      return;
+    }
+    if (tag === "table") { push(mdTable(n)); return; }
+    if (tag === "blockquote") { push(mdInline(n).trim().split("\n").map(l => "> " + l).join("\n")); return; }
+    if (tag === "hr") { push("---"); return; }
+    if (tag === "img") { push(`![${n.getAttribute("alt") || "img"}](${n.src})`); return; }
+    push(mdBlocks(n));   // 其他容器：继续往下走
+  });
+  return parts.join("\n\n");
+}
+function domToMarkdown(node) {
+  /* 必须先 prepareStatement：把 $$$ 公式分隔符换成 $...$、补全图片绝对地址 */
+  return mdBlocks(prepareStatement(node)).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/* ================= Markdown → HTML（只处理上面生成的子集） ================= */
+function mdEscape(s) {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function mdInlineHtml(s) {
+  return s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2">')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+}
+function renderMarkdown(md) {
+  const lines = String(md || "").split("\n");
+  let html = "", i = 0;
+  const isBlockStart = l => /^(#{1,6}\s|```|[-*]\s|\d+\.\s|>\s?|---\s*$)/.test(l);
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {                       // 代码块
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      html += "<pre>" + mdEscape(buf.join("\n")) + "</pre>";
+      continue;
+    }
+    if (!line.trim()) { i++; continue; }
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+      const lv = m[1].length;
+      html += `<h${lv}>${mdInlineHtml(mdEscape(m[2]))}</h${lv}>`;
+      i++; continue;
+    }
+    if (/^(---|\*\*\*)\s*$/.test(line)) { html += "<hr>"; i++; continue; }
+    if ((m = line.match(/^>\s?(.*)$/))) { html += `<blockquote>${mdInlineHtml(mdEscape(m[1]))}</blockquote>`; i++; continue; }
+    if ((m = line.match(/^[-*]\s+(.*)$/)) || (m = line.match(/^\d+\.\s+(.*)$/))) {   // 列表（连续合并）
+      const items = [mdInlineHtml(mdEscape(m[1]))];
+      i++;
+      while (i < lines.length && /^([-*]|\d+\.)\s+/.test(lines[i])) {
+        items.push(mdInlineHtml(mdEscape(lines[i].replace(/^([-*]|\d+\.)\s+/, ""))));
+        i++;
+      }
+      html += "<ul>" + items.map(t => "<li>" + t + "</li>").join("") + "</ul>";
+      continue;
+    }
+    const para = [line];                       // 连续普通行合成一段
+    i++;
+    while (i < lines.length && lines[i].trim() && !isBlockStart(lines[i])) para.push(lines[i++]);
+    html += "<p>" + mdInlineHtml(mdEscape(para.join(" "))) + "</p>";
+  }
+  return html;
+}
+
+/* ================= 渲染与视图切换 ================= */
+function paintStatement() {
+  const r = STATE.lastResult;
+  if (!r || r.kind !== "html" || !STATE.lastHtml) return;
+  const out = $("#stmtOut");
+  out.innerHTML = "";
+  const holder = document.createElement("div");
+  holder.className = "st-body";
+  if (STATE.view === "markdown") {
+    holder.innerHTML = renderMarkdown(STATE.md);
+  } else {
+    const node = new DOMParser().parseFromString(STATE.lastHtml, "text/html")
+                                .querySelector(".problem-statement");
+    holder.append(document.importNode(node, true));
+  }
+  out.append(holder);
   ensureMathJax().then(ok => {
     if (ok && window.MathJax.typesetPromise) window.MathJax.typesetPromise([holder]).catch(() => {});
   });
+  document.querySelectorAll("#viewSwitch button")
+    .forEach(b => b.classList.toggle("on", b.dataset.view === STATE.view));
+}
+function renderStatement(result) {
+  STATE.lastResult = result;
+  const out = $("#stmtOut");
+  out.innerHTML = "";
+  $("#stmtEmpty").hidden = true;
+
+  if (result.kind === "text") {
+    STATE.lastHtml = "";
+    STATE.md = result.text || "";
+    $("#viewSwitch").hidden = true;
+    $("#btnCopyMd").hidden = false;
+    const box = document.createElement("div");
+    box.className = "notice";
+    box.style.cssText = "color:#cbd5e1;background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3)";
+    box.textContent = `已通过 ${result.channel} 抓到题面纯文本（公式与图片可能不完整）：`;
+    const pre = document.createElement("pre");
+    pre.style.cssText = "margin-top:10px;background:#eef2f9;color:#1c2130;white-space:pre-wrap";
+    pre.textContent = result.text;
+    box.append(pre);
+    out.append(box);
+    return;
+  }
+
+  STATE.lastHtml = prepareStatement(result.node).outerHTML;   // 干净的 HTML，供两种视图复用
+  STATE.md = domToMarkdown(result.node);                      // 预生成 Markdown
+  $("#viewSwitch").hidden = false;
+  $("#btnCopyMd").hidden = false;
+  paintStatement();
 }
 
 function setStmtStatus(kind, text) {
@@ -720,6 +911,10 @@ function loadStatement(p) {
   $("#stmtEmpty").textContent = "正在抓取题面…";
   setStmtStatus("load", "抓取中…");
   $("#btnRetry").hidden = true;
+  $("#viewSwitch").hidden = true;
+  $("#btnCopyMd").hidden = true;
+  STATE.lastResult = null;
+  STATE.view = "html";            // 换题后回到默认的 HTML 视图
   scrapeAndShow(p);
 }
 async function scrapeAndShow(p) {
@@ -922,7 +1117,9 @@ async function diagnose() {
 /* ========== 设置 ========== */
 function saveSettings() {
   try {
-    localStorage.setItem(K_SETTINGS, JSON.stringify({ min: $("#minR").value, max: $("#maxR").value }));
+    localStorage.setItem(K_SETTINGS, JSON.stringify({
+      min: $("#minR").value, max: $("#maxR").value
+    }));
   } catch (e) {}
 }
 function loadSettings() {
@@ -931,6 +1128,7 @@ function loadSettings() {
     if (s && s.min) $("#minR").value = s.min;
     if (s && s.max) $("#maxR").value = s.max;
   } catch (e) {}
+  STATE.view = "html";   // 默认始终是 HTML 视图（视图选择只在当前这道题内有效）
 }
 async function saveProxy() {
   const tpl = $("#proxy").value.trim();
@@ -977,6 +1175,29 @@ function bindEvents() {
   $("#btnDiagnose").onclick = diagnose;
   $("#btnDownloadRelay").onclick = downloadRelay;
   $("#btnCopyRelay").onclick = copyRelay;
+  /* 题面视图切换（HTML / Markdown）与复制 Markdown */
+  $("#viewSwitch").onclick = e => {
+    const b = e.target.closest("button[data-view]");
+    if (!b || b.dataset.view === STATE.view) return;
+    STATE.view = b.dataset.view;
+    saveSettings();
+    paintStatement();
+  };
+  $("#btnCopyMd").onclick = async () => {
+    if (!STATE.md) return;
+    try {
+      await navigator.clipboard.writeText(STATE.md);
+      setStmtStatus("ok", "Markdown 已复制到剪贴板");
+    } catch (e) {
+      const ta = document.createElement("textarea");
+      ta.value = STATE.md;
+      document.body.append(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (_) {}
+      ta.remove();
+      setStmtStatus(ok ? "ok" : "err", ok ? "Markdown 已复制到剪贴板" : "复制被浏览器拦截，请切到 Markdown 视图手动选择");
+    }
+  };
   ["#minR", "#maxR"].forEach(sel => {
     $(sel).addEventListener("change", () => { saveSettings(); refreshPoolInfo(); });
     $(sel).addEventListener("input", refreshPoolInfo);
@@ -997,7 +1218,8 @@ function bindEvents() {
   warmUpChannels();   // 后台体检通道，页头会显示"N/M 可用"
   // 便于调试：控制台可用 CFRandApp.draw() / CFRandApp.scrape({contestId:4,index:'A'})
   window.CFRandApp = { draw, state: STATE, renderStatement, convertCfMath, extractStatement,
-                       scrape, channelList, goodNames, diagnose, warmUpChannels };
+                       scrape, channelList, goodNames, diagnose, warmUpChannels,
+                       domToMarkdown, renderMarkdown, paintStatement };
 })();
 </script>
 </body>
